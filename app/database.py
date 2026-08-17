@@ -1,25 +1,25 @@
-"""Database engine and session setup.
-
-Keep this deliberately simple for a sprint exercise: SQLModel handles table
-creation on startup (see app.main) instead of using Alembic migrations.
-"""
+"""Database engine and session setup."""
 
 import os
 
+from dotenv import load_dotenv
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://shiftlog:shiftlog_dev_password@localhost:5432/shiftlog",
-)
+load_dotenv()
 
-# `echo=False` keeps app logs readable; flip to True locally if you need to
-# see the generated SQL while debugging.
-engine = create_engine(DATABASE_URL, echo=False)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set")
+
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+)
 
 
 def create_db_and_tables() -> None:
-    """Create all tables that don't already exist. Called on app startup."""
+    """Create all tables that don't already exist."""
     SQLModel.metadata.create_all(engine)
 
 
