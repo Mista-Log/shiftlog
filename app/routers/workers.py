@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlmodel import Session, select
-
+from datetime import datetime
 from app.database import get_session
-from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate
+from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate, Shift, ShiftRead
 from app.rate_limiter import limiter
 
 from typing import Optional
@@ -87,6 +87,49 @@ def list_workers(session: Session = Depends(get_session), role: Optional[str] = 
         statement = statement.where(Worker.role == role)
     
     return session.exec(statement).all()
+
+
+
+
+@router.get(
+    "/{worker_id}/next-shift",
+    response_model=ShiftRead | None,
+)
+def get_worker_next_shift(
+    worker_id: int,
+    session: Session = Depends(get_session),
+):
+    """
+    GET request:
+    Return the worker's soonest shift starting at or after the current time.
+
+    - Returns 404 if the worker does not exist.
+    - Returns 200 with a ShiftRead object if an upcoming shift exists.
+    - Returns 200 with null if the worker exists but has no upcoming shifts.
+    """
+
+    # Make sure the worker exists first.
+    worker = session.get(Worker, worker_id)
+
+    if worker is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Worker not found",
+        )
+
+    statement = (
+        select(Shift)
+        .where(
+            Shift.worker_id == worker_id,
+            Shift.start_time >= datetime.now(),
+        )
+        .order_by(Shift.start_time)
+        .limit(1)
+    )
+
+    next_shift = session.exec(statement).first()
+
+    return next_shift
 
 
 @router.get("/{worker_id}", response_model=WorkerRead)
