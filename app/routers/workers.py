@@ -1,19 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
-from sqlmodel import Session, select
 from datetime import datetime
 from app.database import get_session
-from app.models import Worker, WorkerCreate, WorkerRead, WorkerUpdate, Shift, ShiftRead
 from app.rate_limiter import limiter
 
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlmodel import Session, select, col
 
-from app.database import get_session
-from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate
-from app.rate_limiter import limiter
+from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, ShiftRead
 
 from app.routers import shifts
 
