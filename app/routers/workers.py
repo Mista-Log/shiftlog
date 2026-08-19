@@ -8,11 +8,20 @@ from typing import Optional
 
 from sqlmodel import Session, select, col
 
-from app.models import Shift, Worker, WorkerCreate, WorkerRead, WorkerSummary, WorkerUpdate, ShiftRead
+from app.models import (
+    Shift,
+    Worker,
+    WorkerCreate,
+    WorkerRead,
+    WorkerSummary,
+    WorkerUpdate,
+    ShiftRead,
+)
 
 from app.routers import shifts
 
 router = APIRouter(prefix="/workers", tags=["workers"])
+
 
 @router.post("", response_model=WorkerRead, status_code=201)
 @limiter.limit("10/30seconds")
@@ -79,19 +88,19 @@ def update_worker(
 
 @router.get("", response_model=list[WorkerRead])
 def list_workers(
-    session: Session = Depends(get_session), 
+    session: Session = Depends(get_session),
     role: Optional[str] = Query(
         default=None,
         description="Filter workers by their job role",
-        examples=["Cashier", "Cook"]
+        examples=["Cashier", "Cook"],
     ),
     name: Optional[str] = Query(
-		default=None,
-		description="Filter workers by name (case-insensitive)",
-		examples=["Carmen Diaz", "carmen"]
-		),
-    include_inactive: bool = Query(default=False)
-    ):
+        default=None,
+        description="Filter workers by name (case-insensitive)",
+        examples=["Carmen Diaz", "carmen"],
+    ),
+    include_inactive: bool = Query(default=False),
+):
     """
     GET request:
     Get all active workers in the database with optional role and/or name filtering.
@@ -109,10 +118,8 @@ def list_workers(
     if name is not None:
         # used icontains() for case-insensitivity; added col from SQLmodel to avoid type warning in IDE
         statement = statement.where(col(Worker.name).icontains(name))
-        
+
     return session.exec(statement).all()
-
-
 
 
 @router.get(
@@ -173,6 +180,7 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
     return worker
 
+
 @router.delete("/{worker_id}", status_code=204)
 def delete_worker(worker_id: int, session: Session = Depends(get_session)):
     worker = session.get(Worker, worker_id)
@@ -181,7 +189,7 @@ def delete_worker(worker_id: int, session: Session = Depends(get_session)):
 
     workerShifts = shifts.list_shifts(worker_id, None, None, None, "asc", session)
 
-    for i in range(0,len(workerShifts)):
+    for i in range(0, len(workerShifts)):
         session.delete(workerShifts[i])
 
     session.delete(worker)
@@ -207,6 +215,10 @@ def get_worker_hours_summary(
 
     shifts = session.exec(statement).all()
 
-    total_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+    total_hours = sum(
+        (shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts
+    )
 
-    return WorkerSummary(worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts))
+    return WorkerSummary(
+        worker_id=worker_id, total_hours=total_hours, shift_count=len(shifts)
+    )

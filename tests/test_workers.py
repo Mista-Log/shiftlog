@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from tests import test_shifts
 
+
 def test_create_worker(client: TestClient):
     response = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     assert response.status_code == 201
@@ -12,16 +13,20 @@ def test_create_worker(client: TestClient):
     assert body["role"] == "Cook"
     assert "id" in body
 
+
 def test_update_worker(client: TestClient):
     create_res = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     worker_id = create_res.json()["id"]
 
-    update_res = client.put(f"/workers/{worker_id}", json={"name": "Jamie Lee", "role": "Head Chef"})
+    update_res = client.put(
+        f"/workers/{worker_id}", json={"name": "Jamie Lee", "role": "Head Chef"}
+    )
     assert update_res.status_code == 200
 
     body = update_res.json()
     assert body["id"] == worker_id
     assert body["role"] == "Head Chef"
+
 
 def test_update_worker_not_found(client: TestClient):
     response = client.put("/workers/9999", json={"name": "Nobody", "role": "Ghost"})
@@ -72,26 +77,41 @@ def test_get_worker_with_no_matching_role(client: TestClient):
     names = {w["name"] for w in response.json()}
     assert names == set()
 
+
 def test_get_worker_next_shift(client: TestClient):
     # Create worker
     worker_res = client.post(
         "/workers",
         json={"name": "Jamie Lee", "role": "Cook"},
     )
+    assert worker_res.status_code == 201
     worker_id = worker_res.json()["id"]
 
-    # Create upcoming shift
     now = datetime.now()
-    shift_res = client.post(
+
+    # Create a later upcoming shift FIRST
+    later_shift_res = client.post(
+        "/shifts",
+        json={
+            "worker_id": worker_id,
+            "start_time": (now + timedelta(hours=4)).isoformat(),
+            "end_time": (now + timedelta(hours=6)).isoformat(),
+        },
+    )
+    assert later_shift_res.status_code == 201
+    later_shift = later_shift_res.json()
+
+    # Create an earlier upcoming shift SECOND
+    earlier_shift_res = client.post(
         "/shifts",
         json={
             "worker_id": worker_id,
             "start_time": (now + timedelta(hours=2)).isoformat(),
-            "end_time": (now + timedelta(hours=10)).isoformat(),
+            "end_time": (now + timedelta(hours=4)).isoformat(),
         },
     )
-
-    assert shift_res.status_code == 201
+    assert earlier_shift_res.status_code == 201
+    earlier_shift = earlier_shift_res.json()
 
     # Get next shift
     response = client.get(f"/workers/{worker_id}/next-shift")
@@ -100,10 +120,12 @@ def test_get_worker_next_shift(client: TestClient):
 
     body = response.json()
 
+    # Verify the earliest upcoming shift was returned
+    assert body["id"] == earlier_shift["id"]
     assert body["worker_id"] == worker_id
-    assert "start_time" in body
-    assert "end_time" in body
-    assert "id" in body
+    assert body["start_time"] == earlier_shift["start_time"]
+    assert body["start_time"] < later_shift["start_time"]
+
 
 def test_get_worker_next_shift_with_only_past_shifts(client: TestClient):
     # Create worker
@@ -144,15 +166,23 @@ def test_get_worker_next_shift_not_found(client: TestClient):
     body = response.json()
 
     assert body["detail"] == "Worker not found"
+
+
 # using a parameterized function to test several case-insensitive inputs, including just firstname
-@pytest.mark.parametrize("search_query,expected", [("jamie", {"Jamie Lee"}), ("Jamie", {"Jamie Lee"}), ("Jamie Lee", {"Jamie Lee"})])
-def test_get_worker_with_matching_name(client: TestClient, search_query: str, expected: set):
+@pytest.mark.parametrize(
+    "search_query,expected",
+    [("jamie", {"Jamie Lee"}), ("Jamie", {"Jamie Lee"}), ("Jamie Lee", {"Jamie Lee"})],
+)
+def test_get_worker_with_matching_name(
+    client: TestClient, search_query: str, expected: set
+):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
 
     response = client.get(f"/workers?name={search_query}")
     names = {w["name"] for w in response.json()}
     assert names == expected
+
 
 def test_get_worker_with_no_matching_name(client: TestClient):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
@@ -162,6 +192,7 @@ def test_get_worker_with_no_matching_name(client: TestClient):
     names = {w["name"] for w in response.json()}
     assert names == set()
 
+
 def test_get_worker_with_role_and_name(client: TestClient):
     client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"})
     client.post("/workers", json={"name": "Sam Osei", "role": "Cashier"})
@@ -169,6 +200,7 @@ def test_get_worker_with_role_and_name(client: TestClient):
     response = client.get("/workers?role=Cashier&name=Sam Osei")
     names = {w["name"] for w in response.json()}
     assert names == {"Sam Osei"}
+
 
 def test_worker_summary_unknown_worker(client: TestClient):
     response = client.get("/workers/9999/summary")
@@ -193,7 +225,9 @@ def test_worker_summary_zero_shifts(client: TestClient):
 
 def test_worker_summary_within_range(client: TestClient):
     # Create a brand new worker:
-    create_res = client.post("/workers", json={"name": "Matanat Khalil", "role": "Creator"})
+    create_res = client.post(
+        "/workers", json={"name": "Matanat Khalil", "role": "Creator"}
+    )
     assert create_res.status_code == 201
     worker_id = create_res.json()["id"]
 
@@ -228,14 +262,19 @@ def test_worker_summary_within_range(client: TestClient):
     assert response_summary_within.json()["shift_count"] == 1
     assert response_summary_within.json()["total_hours"] == 8  # between 17:00 and 9:00
 
-    response_summary_out = client.get(f"/workers/{worker_id}/summary?start=2026-09-09T09:00:00&end=2026-09-09T17:00:00")
+    response_summary_out = client.get(
+        f"/workers/{worker_id}/summary?start=2026-09-09T09:00:00&end=2026-09-09T17:00:00"
+    )
     assert response_summary_out.status_code == 200
 
-    assert response_summary_out.json()["shift_count"]==0
-    assert response_summary_out.json()["total_hours"]==0
+    assert response_summary_out.json()["shift_count"] == 0
+    assert response_summary_out.json()["total_hours"] == 0
+
 
 def test_worker_delete(client: TestClient):
-    post_worker_response = client.post("/workers", json={"name": "Jamie Lee", "role":"Cook"})
+    post_worker_response = client.post(
+        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
+    )
     assert post_worker_response.status_code == 201
     worker_body = post_worker_response.json()
     assert worker_body["name"] == "Jamie Lee"
@@ -269,9 +308,7 @@ def test_worker_delete(client: TestClient):
 
 
 def test_deactivate_worker(client: TestClient):
-    worker = client.post(
-        "/workers", json={"name": "Jamie Lee", "role": "Cook"}
-    ).json()
+    worker = client.post("/workers", json={"name": "Jamie Lee", "role": "Cook"}).json()
 
     response = client.put(
         f"/workers/{worker['id']}",
