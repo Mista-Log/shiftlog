@@ -16,7 +16,9 @@ from app.models import (
     WorkerSummary,
     WorkerUpdate,
     ShiftRead,
+    OrgHoursSummary,
 )
+
 
 from app.routers import shifts
 
@@ -162,6 +164,51 @@ def get_worker_next_shift(
 
     return next_shift
 
+@router.get("/summary", response_model=OrgHoursSummary)
+def get_workers_hours_summary(
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    session: Session = Depends(get_session),
+):
+    """
+    GET request:
+    Get a summary of total hours worked and shift count for all workers within an optional date range.
+    ----------
+    This queries the database for all workers and their shifts, calculating total hours worked and shift count.
+    """
+    statement = select(Worker)
+    workers = session.exec(statement).all()
+
+    summaries = []
+    grand_total_hours = 0.0
+    total_shift_count = 0
+
+    for worker in workers:
+        shift_statement = select(Shift).where(Shift.worker_id == worker.id)
+        if start is not None:
+            shift_statement = shift_statement.where(Shift.start_time >= start)
+        if end is not None:
+            shift_statement = shift_statement.where(Shift.start_time <= end)
+
+        shifts = session.exec(shift_statement).all()
+        total_shift_hours = sum((shift.end_time - shift.start_time).total_seconds() / 3600 for shift in shifts)
+        total_hours = round(total_shift_hours, 2)  # Round to 2 decimal places for better readability
+        grand_total_hours += total_hours
+        total_shift_count += len(shifts)
+        summaries.append(
+            WorkerSummary(
+                worker_id=worker.id,
+                total_hours=total_shift_hours,
+                shift_count=len(shifts)
+            )
+        )
+
+    return OrgHoursSummary(
+        workers=summaries,
+        grand_total_hours=round(grand_total_hours, 2),
+        total_shift_count=total_shift_count
+    )
+
 
 @router.get("/{worker_id}", response_model=WorkerRead)
 def get_worker(worker_id: int, session: Session = Depends(get_session)):
@@ -182,7 +229,8 @@ def get_worker(worker_id: int, session: Session = Depends(get_session)):
 
 
 @router.delete("/{worker_id}", status_code=204)
-def delete_worker(worker_id: int, session: Session = Depends(get_session)):
+@limiter.limit("10/30seconds")
+def delete_worker(request:Request, worker_id: int, session: Session = Depends(get_session)):
     worker = session.get(Worker, worker_id)
     if worker is None:
         raise HTTPException(status_code=404, detail="Worker not found")
