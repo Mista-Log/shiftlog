@@ -98,6 +98,8 @@ class ShiftConflictGroup(SQLModel):
     conflicting_shifts: list[ShiftRead]
 
 
+class ShiftUpdate(ShiftBase):
+    pass
 class WorkerSummary(SQLModel):
     worker_id: int
     total_hours: float

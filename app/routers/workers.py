@@ -2,12 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from datetime import datetime
 from app.database import get_session
 from app.rate_limiter import limiter
-
-
 from typing import Optional
-
 from sqlmodel import Session, select, col
-
 from app.models import (
     Shift,
     Worker,
@@ -18,9 +14,9 @@ from app.models import (
     ShiftRead,
     OrgHoursSummary,
 )
-
-
 from app.routers import shifts
+
+
 
 router = APIRouter(prefix="/workers", tags=["workers"])
 
